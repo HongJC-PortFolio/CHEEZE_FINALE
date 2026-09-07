@@ -1,17 +1,19 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import type { CreditRecord, ScreenState } from "./types";
-import { appendRecord, loadRecords } from "./storage";
+import { appendRecord, loadRecords, subscribeToRecordUpdates } from "./storage";
 import { usePrefersReducedMotion } from "./hooks";
 import CreditScreen from "./components/CreditScreen";
 import SentenceInputScreen from "./components/SentenceInputScreen";
-import LatestRecordHighlight from "./components/LatestRecordHighlight";
 
 export default function App() {
+  const inputMode = window.location.pathname === "/input";
+  const displayMode = !inputMode;
   const [records, setRecords] = useState<CreditRecord[]>(() => loadRecords());
   const [screenState, setScreenState] = useState<ScreenState>("credits");
-  const [pendingRecord, setPendingRecord] = useState<CreditRecord | null>(null);
-  const [emphasizeId, setEmphasizeId] = useState<string | null>(null);
+  const [inputResetKey, setInputResetKey] = useState(0);
+  const recordsRef = useRef(records);
+  const pendingRecordsRef = useRef<CreditRecord[]>([]);
   const reducedMotion = usePrefersReducedMotion();
 
   const overlayOpen = screenState !== "credits";
@@ -20,39 +22,71 @@ export default function App() {
   const openInput = useCallback(() => setScreenState("input"), []);
   const cancelInput = useCallback(() => setScreenState("credits"), []);
 
+  const flushPendingRecords = useCallback(() => {
+    if (pendingRecordsRef.current.length === 0) return;
+
+    const pendingRecords = pendingRecordsRef.current;
+    pendingRecordsRef.current = [];
+    setRecords((current) => {
+      const existingIds = new Set(current.map((record) => record.id));
+      const newRecords = pendingRecords.filter((record) => !existingIds.has(record.id));
+      if (newRecords.length === 0) return current;
+      const next = [...current, ...newRecords];
+      recordsRef.current = next;
+      return next;
+    });
+  }, []);
+
+  useEffect(() => {
+    recordsRef.current = records;
+  }, [records]);
+
+  useEffect(() => {
+    return subscribeToRecordUpdates((newRecord) => {
+      if (
+        !displayMode ||
+        recordsRef.current.some((record) => record.id === newRecord.id) ||
+        pendingRecordsRef.current.some((record) => record.id === newRecord.id)
+      ) {
+        return;
+      }
+
+      pendingRecordsRef.current.push(newRecord);
+    });
+  }, [displayMode]);
+
   const submitSentence = useCallback(
     (sentence: string) => {
       // 1. 현재 크레딧 애니메이션 상태는 CreditScreen이 계속 마운트된 채 유지된다 (pause만 됨)
       // 2~3. 입력 화면에서 문장 등록
-      const { records: next, newRecord } = appendRecord(records, sentence);
+      const { records: next } = appendRecord(records, sentence);
+      recordsRef.current = next;
       setRecords(next); // 5. 기록 목록 마지막에 새 기록 추가
-      setPendingRecord(newRecord);
-      setScreenState("highlight"); // 4. 최신 기록 중앙 강조
+      if (inputMode) {
+        setInputResetKey((current) => current + 1);
+        return;
+      }
     },
-    [records]
+    [inputMode, records]
   );
-
-  const handleHighlightComplete = useCallback(() => {
-    if (pendingRecord) setEmphasizeId(pendingRecord.id); // 6. 강조 위치에서 크레딧 재생
-    setPendingRecord(null);
-    setScreenState("credits");
-  }, [pendingRecord]);
-
-  const clearEmphasize = useCallback(() => setEmphasizeId(null), []); // 7. 다음 반복부터 정상 포함
 
   return (
     <div className="finale-app">
-      <CreditScreen
-        records={records}
-        emphasizeId={emphasizeId}
-        onEmphasizeConsumed={clearEmphasize}
-        onOpenInput={openInput}
-        paused={overlayOpen}
-        reducedMotion={reducedMotion}
-      />
+      {inputMode ? (
+        <SentenceInputScreen key={inputResetKey} onSubmit={submitSentence} onCancel={() => {}} />
+      ) : (
+        <CreditScreen
+          records={records}
+          emphasizeId={null}
+          onEmphasizeConsumed={flushPendingRecords}
+          onOpenInput={openInput}
+          paused={overlayOpen}
+          reducedMotion={reducedMotion}
+        />
+      )}
 
       <AnimatePresence mode="wait">
-        {screenState === "input" && (
+        {!inputMode && screenState === "input" && (
           <motion.div
             key="input"
             className="overlay-layer"
@@ -65,22 +99,6 @@ export default function App() {
           </motion.div>
         )}
 
-        {screenState === "highlight" && pendingRecord && (
-          <motion.div
-            key="highlight"
-            className="overlay-layer"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: fadeDuration, ease: "easeInOut" }}
-          >
-            <LatestRecordHighlight
-              record={pendingRecord}
-              reducedMotion={reducedMotion}
-              onComplete={handleHighlightComplete}
-            />
-          </motion.div>
-        )}
       </AnimatePresence>
     </div>
   );

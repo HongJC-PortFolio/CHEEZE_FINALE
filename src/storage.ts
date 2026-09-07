@@ -1,38 +1,19 @@
 import type { CreditRecord } from "./types";
 import { STORAGE_KEY } from "./constants";
 
+const RECORD_CHANNEL_NAME = "finale-credit-records";
+
 const SAMPLE_SENTENCES = [
-  "작가 - 제목 - 설명",
-  "오늘의 끝에서 새로운 시작이 열리는 순간을 느껴보았다.",
-  "작은 다짐 하나가 어둠을 밝히는 법을 알게 되었다.",
-  "우리는 서로의 이름을 기억하며 조금씩 더 선명해진다.",
-  "한 번의 침묵이 오래된 마음을 다시 깨우는 밤이었다.",
-  "어느새 우리의 하루가 별빛처럼 조용히 쌓여 있었다.",
-  "기다림은 때로 가장 따뜻한 답이 될 수 있다는 걸 배웠다.",
-  "길고 긴 겨울 끝에서 봄의 냄새가 먼저 피어났다.",
-  "사소한 미소 하나가 하루의 무게를 덜어주었다.",
-  "눈을 감으면 마음속에 남아 있던 오래된 노래가 들렸다.",
-  "우연히 마주친 순간이 평생의 기억이 될 수 있음을 믿는다.",
-  "모든 끝은 또 다른 문을 열어둔다는 사실을 기억하고 싶다.",
-  "오늘의 나는 어제보다 조금 더 단단해진 기분이었다.",
-  "한 줄의 메모가 내일의 나를 구해줄지도 모른다.",
-  "가끔은 멈춰 서 있는 것이 가장 깊은 이동일 수 있다.",
-  "손끝에서 느껴진 온기가 마음을 천천히 풀어주었다.",
-  "사라진 것처럼 보였던 희망이 여전히 내 안에 있었다.",
-  "이제는 두려움보다 감사가 먼저 마음에 올라온다.",
-  "누군가의 말 한마디가 마음의 풍경을 바꾸었다.",
-  "아무것도 하지 않아도 하루는 분명히 나를 품어주었다.",
-  "우리의 삶은 생각보다 훨씬 더 많은 사랑으로 채워져 있다.",
+  "Artist - Title - Description",
   "조용한 시간 속에서도 충분히 빛날 수 있다는 걸 알았다.",
+  "The ending is quiet, but it stays with me.",
   "한 걸음씩 나아갈 때마다 세상이 조금씩 바뀐다.",
+  "I found a new beginning inside this final scene.",
   "내일을 향해 걸어가고 있다는 사실만으로도 위로가 된다.",
+  "Some memories keep moving after the image fades.",
   "어제의 흔적이 오늘의 나를 부드럽게 안아 주었다.",
+  "Tonight, I leave one small light behind.",
   "내 안의 작은 불빛이 지금도 꺼지지 않았다는 걸 안다.",
-  "모든 순간은 지나가지만 그 안의 의미는 남는다.",
-  "누구도 모르게 우리 삶은 매일 조금씩 아름다워진다.",
-  "한 번쯤은 자신을 믿어주는 시간도 필요하다고 느꼈다.",
-  "아무 말 없이 함께 있어 주는 것만으로 충분했다.",
-  "삶은 늘 예고 없이 가장 필요한 것을 건네준다.",
 ];
 
 /**
@@ -119,7 +100,40 @@ export function appendRecord(
   };
   const next = [...records, newRecord];
   saveRecords(next);
+  broadcastRecord(newRecord);
   return { records: next, newRecord };
+}
+
+/**
+ * 같은 브라우저의 다른 탭에 새 기록을 전달한다.
+ * BroadcastChannel을 지원하지 않는 브라우저에서는 localStorage 이벤트를 사용한다.
+ */
+export function subscribeToRecordUpdates(onRecord: (record: CreditRecord) => void): () => void {
+  const channel = createRecordChannel();
+  const handleChannelMessage = (event: MessageEvent<unknown>) => {
+    if (isValidRecord(event.data)) onRecord(event.data);
+  };
+  const handleStorage = (event: StorageEvent) => {
+    if (event.key !== STORAGE_KEY || !event.newValue) return;
+
+    try {
+      const parsed: unknown = JSON.parse(event.newValue);
+      if (Array.isArray(parsed)) {
+        parsed.filter(isValidRecord).forEach(onRecord);
+      }
+    } catch {
+      // 다른 탭의 잘못된 저장값은 현재 화면을 중단시키지 않는다.
+    }
+  };
+
+  channel?.addEventListener("message", handleChannelMessage);
+  window.addEventListener("storage", handleStorage);
+
+  return () => {
+    channel?.removeEventListener("message", handleChannelMessage);
+    channel?.close();
+    window.removeEventListener("storage", handleStorage);
+  };
 }
 
 /**
@@ -152,4 +166,16 @@ function createId(): string {
     return crypto.randomUUID();
   }
   return `rec_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+}
+
+function broadcastRecord(record: CreditRecord): void {
+  const channel = createRecordChannel();
+  if (!channel) return;
+  channel.postMessage(record);
+  channel.close();
+}
+
+function createRecordChannel(): BroadcastChannel | null {
+  if (typeof BroadcastChannel === "undefined") return null;
+  return new BroadcastChannel(RECORD_CHANNEL_NAME);
 }
