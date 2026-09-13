@@ -103,7 +103,7 @@ textarea {
 .credit-roll__title {
   width: 100%;
   margin: 0 auto;
-  padding: 0 0 72px;
+  padding: 0 0 36px;
   color: var(--finale-text-white);
   font-family: Futura, "Century Gothic", Helvetica, Arial, sans-serif;
   font-size: clamp(28px, 3.2vw, 52px);
@@ -121,6 +121,35 @@ textarea {
   text-align: center;
 }
 
+.credit-item__content {
+  width: min(100%, 44rem);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 2ch minmax(0, 1fr);
+  align-items: baseline;
+  margin: 0 auto;
+  transform: translateX(-0.5rem);
+}
+
+.credit-item__separator {
+  width: 100%;
+}
+
+.credit-item__nickname {
+  color: var(--finale-text-dim);
+  font-size: clamp(16px, 1.45vw, 28px);
+  font-weight: 400;
+  letter-spacing: 0.025em;
+  line-height: 1.08;
+  text-align: right;
+  word-break: keep-all;
+  overflow-wrap: break-word;
+  grid-column: 1;
+}
+
+.credit-roll__group > .credit-item:last-child {
+  padding-bottom: 48px;
+}
+
 .credit-item__sentence {
   margin: 0;
   color: var(--finale-text-dim);
@@ -131,9 +160,18 @@ textarea {
   word-break: keep-all;
   overflow-wrap: break-word;
   transition: color 0.6s ease, font-size 0.6s ease;
+  grid-column: 3;
+  text-align: left;
 }
 
 .credit-item--emphasized .credit-item__sentence {
+  color: var(--finale-text-bright);
+  font-weight: 500;
+  font-size: clamp(18px, 1.65vw, 32px);
+  text-shadow: 0 0 10px rgba(255, 255, 255, 0.16);
+}
+
+.credit-item--emphasized .credit-item__nickname {
   color: var(--finale-text-bright);
   font-weight: 500;
   font-size: clamp(18px, 1.65vw, 32px);

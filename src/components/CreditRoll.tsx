@@ -12,6 +12,7 @@ type CreditRollProps = {
   /** 입력/강조 화면이 열려 있는 동안 스크롤을 일시 정지 */
   paused: boolean;
   reducedMotion: boolean;
+  showTitle: boolean;
 };
 
 const EMPTY_MESSAGE = "당신의 한 문장으로\nFINALE를 시작해주세요.";
@@ -22,6 +23,7 @@ export default function CreditRoll({
   onEmphasizeConsumed,
   paused,
   reducedMotion,
+  showTitle,
 }: CreditRollProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
@@ -59,9 +61,11 @@ export default function CreditRoll({
             className="credit-roll__group"
             aria-hidden={groupIndex > 0}
           >
-            <div className="credit-roll__title" aria-hidden={groupIndex > 0}>
-              FINALE; TUNE A
-            </div>
+            {showTitle && (
+              <div className="credit-roll__title" aria-hidden={groupIndex > 0}>
+                FINALE; TUNE A
+              </div>
+            )}
             {items.map((record) => {
               const isEmphasized = record.id === emphasizeId;
               return (

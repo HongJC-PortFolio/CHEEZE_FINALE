@@ -1,5 +1,6 @@
 import type { CreditRecord } from "./types";
 import { STORAGE_KEY } from "./constants";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 const RECORD_CHANNEL_NAME = "finale-credit-records";
 
@@ -33,7 +34,7 @@ export function loadRecords(): CreditRecord[] {
     const records = parsed.filter(isValidRecord);
     if (records.length === 0) return seedSampleRecords();
 
-    return ensureMinimumSampleRecords(records);
+    return ensureMinimumSampleRecords(records).sort(sortNewestFirst);
   } catch (error) {
     // localStorage 파싱 오류: 콘솔에만 남기고 빈 목록으로 안전하게 폴백
     console.warn("[FINALE] 기록을 불러오는 중 오류가 발생했습니다.", error);
@@ -44,6 +45,7 @@ export function loadRecords(): CreditRecord[] {
 function seedSampleRecords(): CreditRecord[] {
   const records = SAMPLE_SENTENCES.map((sentence, index) => ({
     id: `seed_${index + 1}`,
+    nickname: "FINALE",
     sentence,
     createdAt: Date.now() - (SAMPLE_SENTENCES.length - index) * 1000,
   }));
@@ -61,6 +63,7 @@ function ensureMinimumSampleRecords(records: CreditRecord[]): CreditRecord[] {
   const appended = SAMPLE_SENTENCES.slice(records.length, records.length + missingCount).map(
     (sentence, index) => ({
       id: `seed_${records.length + index + 1}`,
+      nickname: "FINALE",
       sentence,
       createdAt: Date.now() - (missingCount - index) * 1000,
     })
@@ -91,17 +94,38 @@ export function saveRecords(records: CreditRecord[]): boolean {
  */
 export function appendRecord(
   records: CreditRecord[],
+  nickname: string,
   sentence: string
 ): { records: CreditRecord[]; newRecord: CreditRecord } {
   const newRecord: CreditRecord = {
     id: createId(),
+    nickname: nickname.trim(),
     sentence: sentence.trim(),
     createdAt: Date.now(),
   };
   const next = [...records, newRecord];
   saveRecords(next);
   broadcastRecord(newRecord);
+  void saveRecordRemotely(newRecord);
   return { records: next, newRecord };
+}
+
+export async function loadRecordsRemotely(): Promise<CreditRecord[] | null> {
+  const client = getSupabaseClient();
+  if (!client) return null;
+
+  const { data, error } = await client
+    .from("messages")
+    .select("id, nickname, sentence, created_at")
+    .eq("status", "approved")
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    console.warn("[FINALE] 외부 기록을 불러오지 못했습니다.", error);
+    return null;
+  }
+
+  return data.map(toCreditRecord).filter(isValidRecord).sort(sortNewestFirst);
 }
 
 /**
@@ -110,6 +134,14 @@ export function appendRecord(
  */
 export function subscribeToRecordUpdates(onRecord: (record: CreditRecord) => void): () => void {
   const channel = createRecordChannel();
+  const supabase = getSupabaseClient();
+  const remoteChannel = supabase
+    ?.channel("finale-messages")
+    .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages" }, (payload) => {
+      const record = toCreditRecord(payload.new as RemoteMessage);
+      if (isValidRecord(record)) onRecord(record);
+    })
+    .subscribe();
   const handleChannelMessage = (event: MessageEvent<unknown>) => {
     if (isValidRecord(event.data)) onRecord(event.data);
   };
@@ -132,6 +164,7 @@ export function subscribeToRecordUpdates(onRecord: (record: CreditRecord) => voi
   return () => {
     channel?.removeEventListener("message", handleChannelMessage);
     channel?.close();
+    if (remoteChannel) void supabase?.removeChannel(remoteChannel);
     window.removeEventListener("storage", handleStorage);
   };
 }
@@ -155,10 +188,15 @@ function isValidRecord(value: unknown): value is CreditRecord {
   const v = value as Record<string, unknown>;
   return (
     typeof v.id === "string" &&
+    typeof v.nickname === "string" &&
     typeof v.sentence === "string" &&
     v.sentence.trim().length > 0 &&
     typeof v.createdAt === "number"
   );
+}
+
+function sortNewestFirst(left: CreditRecord, right: CreditRecord): number {
+  return right.createdAt - left.createdAt;
 }
 
 function createId(): string {
@@ -178,4 +216,41 @@ function broadcastRecord(record: CreditRecord): void {
 function createRecordChannel(): BroadcastChannel | null {
   if (typeof BroadcastChannel === "undefined") return null;
   return new BroadcastChannel(RECORD_CHANNEL_NAME);
+}
+
+type RemoteMessage = {
+  id: string;
+  nickname: string;
+  sentence: string;
+  created_at: string;
+};
+
+function toCreditRecord(message: RemoteMessage): CreditRecord {
+  return {
+    id: message.id,
+    nickname: message.nickname,
+    sentence: message.sentence,
+    createdAt: new Date(message.created_at).getTime(),
+  };
+}
+
+async function saveRecordRemotely(record: CreditRecord): Promise<void> {
+  const client = getSupabaseClient();
+  if (!client) return;
+
+  const { error } = await client.from("messages").insert({
+    id: record.id,
+    nickname: record.nickname,
+    sentence: record.sentence,
+    status: "approved",
+  });
+
+  if (error) console.warn("[FINALE] 외부 기록 저장에 실패했습니다.", error);
+}
+
+function getSupabaseClient(): SupabaseClient | null {
+  const url = import.meta.env.VITE_SUPABASE_URL;
+  const key = import.meta.env.VITE_SUPABASE_ANON_KEY;
+  if (!url || !key) return null;
+  return createClient(url, key);
 }

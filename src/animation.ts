@@ -36,7 +36,7 @@ export function useCreditScroll(
   const speedFactorRef = useRef(1);
   const rafIdRef = useRef<number | null>(null);
   const lastTimeRef = useRef<number | null>(null);
-  const contentHeightRef = useRef(0);
+  const loopDistanceRef = useRef(0);
   const initializedRef = useRef(false);
 
   const onLoopRestartRef = useRef(onLoopRestart);
@@ -51,22 +51,26 @@ export function useCreditScroll(
     if (!container || !list) return;
 
     const measure = () => {
-      const prevContentHeight = contentHeightRef.current;
       const firstGroup = list.firstElementChild as HTMLElement | null;
-      const nextContentHeight = firstGroup?.getBoundingClientRect().height ?? list.getBoundingClientRect().height;
+      const nextLoopDistance = firstGroup?.getBoundingClientRect().height ?? 0;
+      const previousLoopDistance = loopDistanceRef.current;
 
-      contentHeightRef.current = nextContentHeight;
+      loopDistanceRef.current = nextLoopDistance;
 
-      if (!initializedRef.current && nextContentHeight > 0) {
+      if (!initializedRef.current && nextLoopDistance > 0) {
         positionRef.current = 0;
         initializedRef.current = true;
-      } else if (prevContentHeight > 0 && nextContentHeight > 0 && prevContentHeight !== nextContentHeight) {
-        const ratio = prevContentHeight > 0 ? positionRef.current / prevContentHeight : 0;
-        positionRef.current = ratio * nextContentHeight;
+      } else if (
+        previousLoopDistance > 0 &&
+        nextLoopDistance > 0 &&
+        previousLoopDistance !== nextLoopDistance
+      ) {
+        const ratio = positionRef.current / previousLoopDistance;
+        positionRef.current = ratio * nextLoopDistance;
       }
 
       if (positionRef.current < 0) positionRef.current = 0;
-      if (positionRef.current > nextContentHeight) positionRef.current = nextContentHeight;
+      if (positionRef.current > nextLoopDistance) positionRef.current = nextLoopDistance;
     };
 
     measure();
@@ -117,14 +121,15 @@ export function useCreditScroll(
       speedFactorRef.current += (targetFactor - speedFactorRef.current) * 0.08;
 
       const nextPosition = positionRef.current + baseSpeed * speedFactorRef.current * dt;
-      const listHeight = contentHeightRef.current;
+      const loopDistance = loopDistanceRef.current;
 
-      if (listHeight > 0) {
-        if (nextPosition >= listHeight) {
-          positionRef.current = nextPosition - listHeight;
+      if (loopDistance > 0) {
+        // 첫 그룹의 높이는 제목부터 마지막 문장의 하단까지다.
+        // 이 거리를 모두 지나면 마지막 문장이 화면 위로 사라지고 다음 그룹이 같은 위치에 있다.
+        positionRef.current = nextPosition;
+        if (positionRef.current >= loopDistance) {
+          positionRef.current -= loopDistance;
           onLoopRestartRef.current?.();
-        } else {
-          positionRef.current = nextPosition;
         }
       } else {
         positionRef.current = 0;

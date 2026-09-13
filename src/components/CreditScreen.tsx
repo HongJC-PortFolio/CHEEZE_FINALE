@@ -10,6 +10,8 @@ type CreditScreenProps = {
   onOpenInput: () => void;
   paused: boolean;
   reducedMotion: boolean;
+  showInputControl?: boolean;
+  showTitle: boolean;
 };
 
 export default function CreditScreen({
@@ -19,6 +21,8 @@ export default function CreditScreen({
   onOpenInput,
   paused,
   reducedMotion,
+  showInputControl = true,
+  showTitle,
 }: CreditScreenProps) {
   return (
     <div className="credit-screen">
@@ -28,8 +32,9 @@ export default function CreditScreen({
         onEmphasizeConsumed={onEmphasizeConsumed}
         paused={paused}
         reducedMotion={reducedMotion}
+        showTitle={showTitle}
       />
-      <HiddenControls onOpenInput={onOpenInput} />
+      {showInputControl && <HiddenControls onOpenInput={onOpenInput} />}
       <AudioController />
     </div>
   );

@@ -26,50 +26,39 @@
 ## 현재 상태
 
 - 기준 코드: Version 8
-- 현재 구현: 단일 브라우저에서 동작하는 엔딩 크레딧과 `localStorage` 저장
+- 현재 구현: 엔딩 크레딧, 닉네임 입력, `localStorage` 저장
 - 구현 완료: 같은 노트북의 `/input`과 `/display` 탭 사이 실시간 통신
-- 아직 미결정: Supabase Realtime, Firebase, 자체 WebSocket 중 최종 선택
+- 외부 저장소: Supabase Realtime 연동 코드와 테이블 정의 추가
+- 실제 iPad 검증에 필요: Supabase 프로젝트 URL과 anon key
 - 오디오: 저작권이 확인된 음원 파일을 추가하기 전까지 비활성 상태
 
-현재 `localStorage`는 브라우저별 저장이므로 두 기기 간 연동에 사용할 수 없습니다.
-실시간 데이터 저장소를 도입한 뒤 입력과 출력의 연결을 검증해야 합니다.
+Supabase 환경변수가 없으면 기존처럼 `BroadcastChannel`과 `localStorage`로 동작합니다.
+환경변수를 설정하면 iPad 입력과 노트북 출력이 Supabase를 통해 연결됩니다.
 
 ## 작업 체크포인트
 
-### Checkpoint 1 — 화면 역할 분리
+### Checkpoint 1 — 화면 역할 분리: `/input`은 노트북 입력 전용, `/display`는 iPad 출력 전용으로 구성했습니다.
+### Checkpoint 2 — 닉네임 데이터: 닉네임과 메시지를 함께 입력하고 저장하도록 확장했습니다.
+### Checkpoint 3 — 실시간 연결: Supabase Realtime과 로컬 탭 fallback으로 입력과 출력을 연결했습니다.
+### Checkpoint 4 — 작품 연출: 새 메시지를 대기열에 두고 사이클 종료 후 다음 크레딧에 합류시켰습니다.
+### Checkpoint 5 — 중앙 2열 배치: 닉네임은 왼쪽, 메시지는 오른쪽에 고정 열로 배치했습니다.
+### Checkpoint 6 — 루프 안정화: 화면 크기와 그룹 높이를 기준으로 끊김 없는 반복 이동을 보강했습니다.
+### Checkpoint 7 — 샘플 데이터: 폰트 확인용 한국어/영어 더미 데이터 10개를 유지합니다.
+### Checkpoint 8 — 전시장 검증: 네트워크, 장시간 실행, 전체 화면 검증은 후순위로 남겨두었습니다.
 
-- [x] 입력 화면과 출력 화면의 진입 방식 결정
-- [x] `/input`, `/display` 경로로 화면 모드 구성
-- [x] 출력 화면에서 입력 UI 숨김
+## Supabase 설정
 
-### Checkpoint 2 — 메시지 데이터 구조
+1. Supabase 프로젝트를 만든다.
+2. [supabase/messages.sql](supabase/messages.sql)을 SQL Editor에서 실행한다.
+3. `.env.example`을 `.env.local`로 복사한다.
+4. `VITE_SUPABASE_URL`과 `VITE_SUPABASE_ANON_KEY`를 입력한다.
+5. 개발 서버를 재시작한다.
 
-- [x] 현재 `id`, `sentence`, `createdAt` 구조 유지
-- [ ] 이름 또는 닉네임 필드 추가 여부 결정
-- [x] 입력 길이와 빈 문장 검증
+```bash
+cp .env.example .env.local
+```
 
-### Checkpoint 3 — 실시간 연결
-
-- [x] 같은 브라우저 탭 간 `BroadcastChannel` 연결
-- [x] 입력 화면에서 메시지 저장
-- [x] 출력 화면에서 새 메시지 수신
-- [x] `localStorage` 이벤트를 fallback으로 연결
-- [ ] iPad 연동을 위한 외부 저장소 도입 여부 결정
-
-### Checkpoint 4 — 작품 연출 연결
-
-- [ ] 새 메시지를 즉시 DOM 중간에 삽입하지 않고 대기열 처리
-- [ ] 새 문장 중앙 강조 연출 연결
-- [ ] 강조 후 엔딩 크레딧에 자연스럽게 합류
-- [ ] 루프 경계에서 속도와 위치가 튀지 않는지 확인
-
-### Checkpoint 5 — 전시장 검증
-
-- [ ] 입력 노트북과 출력 iMac으로 실제 연결 테스트
-- [ ] 네트워크가 잠시 끊겨도 기존 크레딧이 계속 재생되는지 확인
-- [ ] 새로고침 후 메시지 복구 확인
-- [ ] 최소 2시간 장시간 실행 테스트
-- [ ] 전체 화면과 프로젝터 해상도 테스트
+키가 없으면 외부 연동은 비활성화되고 로컬 탭 연동만 사용됩니다.
 
 ## 실행
 
@@ -93,7 +82,7 @@ npm run build
 
 ## 다음 작업
 
-1. 노트북의 `/input`과 `/display` 두 탭으로 계속 사용성 테스트를 한다.
-2. 새 메시지 강조와 크레딧 합류 타이밍을 확인한다.
-3. iPad를 입력기로 사용할 필요가 생기면 외부 저장소를 선택한다.
-4. 검증된 연결 위에 오프라인 복구와 전시장 장시간 테스트를 붙인다.
+1. Supabase URL과 anon key를 설정한다.
+2. iPad에서 `/input`, 노트북에서 `/display`를 열어 메시지를 주고받는다.
+3. 루프 경계에서 속도와 위치가 튀지 않는지 수시로 확인한다.
+4. 전시장 검증은 나중에 진행한다.

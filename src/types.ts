@@ -5,6 +5,7 @@
 /** 관람객이 남긴 한 줄 기록 */
 export type CreditRecord = {
   id: string;
+  nickname: string;
   sentence: string;
   createdAt: number;
 };
@@ -17,5 +18,6 @@ export type ScreenState =
 
 /** 입력 화면에서 등록 시 발생하는 콜백 payload */
 export type SubmitPayload = {
+  nickname: string;
   sentence: string;
 };

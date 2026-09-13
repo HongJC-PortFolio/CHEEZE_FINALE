@@ -3,16 +3,18 @@ import type { FormEvent } from "react";
 import { SENTENCE_MAX_LENGTH, SENTENCE_MIN_LENGTH } from "../constants";
 
 type SentenceInputScreenProps = {
-  onSubmit: (sentence: string) => void;
+  onSubmit: (nickname: string, sentence: string) => void;
   onCancel: () => void;
 };
 
 export default function SentenceInputScreen({ onSubmit, onCancel }: SentenceInputScreenProps) {
+  const [nickname, setNickname] = useState("");
   const [value, setValue] = useState("");
   const [error, setError] = useState<string | null>(null);
   const isSubmittingRef = useRef(false);
 
   const trimmedLength = value.trim().length;
+  const trimmedNickname = nickname.trim();
   const isValid = trimmedLength >= SENTENCE_MIN_LENGTH && trimmedLength <= SENTENCE_MAX_LENGTH;
 
   const handleSubmit = (e: FormEvent) => {
@@ -20,6 +22,10 @@ export default function SentenceInputScreen({ onSubmit, onCancel }: SentenceInpu
     if (isSubmittingRef.current) return; // 중복 클릭 방지
 
     const trimmed = value.trim();
+    if (trimmedNickname.length === 0) {
+      setError("닉네임을 남겨주세요.");
+      return;
+    }
     if (trimmed.length === 0) {
       setError("공백만으로는 남길 수 없어요.");
       return;
@@ -34,7 +40,7 @@ export default function SentenceInputScreen({ onSubmit, onCancel }: SentenceInpu
     }
 
     isSubmittingRef.current = true;
-    onSubmit(trimmed);
+    onSubmit(trimmedNickname, trimmed);
   };
 
   return (
@@ -49,6 +55,18 @@ export default function SentenceInputScreen({ onSubmit, onCancel }: SentenceInpu
         <form className="input-screen__form" onSubmit={handleSubmit}>
           <input
             autoFocus
+            className="input-screen__field"
+            type="text"
+            value={nickname}
+            maxLength={30}
+            placeholder="닉네임을 남겨주세요."
+            onChange={(e) => {
+              setNickname(e.target.value);
+              if (error) setError(null);
+            }}
+          />
+
+          <input
             className="input-screen__field"
             type="text"
             value={value}

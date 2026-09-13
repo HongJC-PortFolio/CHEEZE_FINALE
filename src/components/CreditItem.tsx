@@ -19,7 +19,11 @@ const CreditItem = forwardRef<HTMLDivElement, CreditItemProps>(
         className={`credit-item${isEmphasized ? " credit-item--emphasized" : ""}`}
       >
         {isEmphasized && <span className="credit-item__label">방금 남긴 문장</span>}
-        <p className="credit-item__sentence">{record.sentence}</p>
+        <div className="credit-item__content">
+          <span className="credit-item__nickname">{record.nickname}</span>
+          <span className="credit-item__separator" aria-hidden="true" />
+          <p className="credit-item__sentence">{record.sentence}</p>
+        </div>
       </div>
     );
   }
